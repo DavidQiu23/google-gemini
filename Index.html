@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<!--
+    WARNING! Make sure that you match all Quasar related
+    tags to the same version! (Below it's "@2.14.2")
+  -->
+
+<head>
+    <meta charset="utf-8" />
+    <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet"
+        type="text/css">
+    <link href="https://use.fontawesome.com/releases/v6.1.1/css/all.css" rel="stylesheet" type="text/css">
+    <link href="https://cdn.jsdelivr.net/npm/animate.css@^4.0.0/animate.min.css" rel="stylesheet" type="text/css">
+    <link href="https://cdn.jsdelivr.net/npm/quasar@2.14.2/dist/quasar.prod.css" rel="stylesheet" type="text/css">
+    <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/default.min.css">
+</head>
+
+<body>
+    <!-- example of injection point where you write your app template -->
+    <div id="q-app">
+        <q-layout view="hHh lpR fFf">
+
+            <q-header elevated class="bg-primary text-white">
+                <q-toolbar>
+                    <q-toolbar-title>
+                        <div class="text-h6">Multicast</div>
+                        <div class="text-subtitle2">Google Gemini</div>
+                    </q-toolbar-title>
+                    <q-btn flat round dense icon="fa-solid fa-rotate-right" class="q-mr-xs" @click="reflash()" />
+                </q-toolbar>
+
+            </q-header>
+
+            <q-page-container>
+                <q-page padding>
+                    <div v-for="(message, index) in messages">
+                        <q-chat-message :sent="message.sent" :text="message.text" text-html>
+                            <template v-slot:stamp v-if="message.sent">
+                                <q-btn round color='primary' size="xs" icon='fa-solid fa-minus'
+                                    @click="deleteComment(index)" />
+                            </template>
+                        </q-chat-message>
+                    </div>
+                </q-page>
+            </q-page-container>
+
+            <q-footer elevated class="bg-primary">
+                <q-input outlined :dark="true" v-model="text" :dense="dense" placeholder="發送訊息"
+                    v-on:keyup.enter.exact="submit()" autogrow>
+                    <template v-slot:append>
+                        <q-btn icon="fa-solid fa-paper-plane" @click="submit()" />
+                    </template>
+                </q-input>
+            </q-footer>
+        </q-layout>
+    </div>
+
+    <!-- Add the following at the end of your body tag -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quasar@2.14.2/dist/quasar.umd.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quasar@2.14.2/dist/lang/zh-TW.umd.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quasar@2.14.2/dist/icon-set/svg-fontawesome-v6.umd.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-highlight/lib/index.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script>
+        let key;
+        const { reactive, ref, watch } = Vue;
+        const { markedHighlight } = globalThis.markedHighlight;
+        marked.use(markedHighlight({
+            langPrefix: 'hljs language-',
+            highlight(code, lang, info) {
+                const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                return hljs.highlight(code, { language }).value;
+            }
+        }));
+        fetch('data.json')
+            .then(response => response.json())
+            .then(json => {
+                console.log(json);
+                key = json.key;
+            })
+            .catch(error => console.error('讀取檔案時發生錯誤：', error));
+
+        /*
+          Example kicking off the UI. Obviously, adapt this to your specific needs.
+          Assumes you have a <div id="q-app"></div> in your <body> above
+         */
+        const app = Vue.createApp({
+            setup() {
+                const messages = ref([{
+                    text: ['歡迎使用Google Gemini'],
+                    sent: false,
+                    load: false
+                }]);
+                const text = ref('');
+
+                const submit = () => {
+                    messages.value.push(
+                        {
+                            text: [text.value],
+                            sent: true,
+                            load: false
+                        }
+                    );
+                    messages.value.push(
+                        {
+                            text: [''],
+                            sent: false,
+                            load: true
+                        }
+                    );
+                    const payload = {
+                        contents: [],
+                        tools: [
+                            {
+                                "google_search": {}
+                            }
+                        ]
+                    };
+                    messages.value.forEach(element => {
+                        if (element.text[0] != "歡迎使用Google Gemini" && element.text[0] != "") {
+                            if (element.sent) {
+                                payload.contents.push({
+                                    role: "user",
+                                    parts: [{
+                                        text: element.text[0]
+                                    }]
+                                });
+                            } else {
+                                payload.contents.push({
+                                    role: "model",
+                                    parts: [{
+                                        text: element.text[0]
+                                    }]
+                                });
+                            }
+                        }
+
+                    });
+                    console.log(JSON.stringify(payload));
+                    fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=" + key, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload),
+                        signal: null // 可選，用於取消請求的AbortController信號
+                    })
+                        .then(response => {
+                            if (response.status != 200) {
+                                throw new Error();
+                            }
+                            const reader = response.body.getReader();
+                            let partialResult = '';
+                            text.value = "";
+                            function processChunk({ done, value }) {
+                                if (done) {
+                                    // 處理生成結果
+                                    console.log(partialResult);
+                                    if (!partialResult) {
+                                        messages.value[messages.value.length - 1].text[0] = "無回應";
+                                    }
+                                    messages.value[messages.value.length - 1].load = false;
+                                    messages.value[messages.value.length - 1].text[0] = marked.parse(partialResult);
+                                    return;
+                                }
+                                // 將部分結果轉換為字符串
+                                const chunkStr = new TextDecoder().decode(value);
+                                // 將部分結果添加到總結果中
+                                let matches = chunkStr.match(/"text": (.*)/);
+                                // 如果有匹配的結果且捕獲組存在
+                                if (matches && matches.length > 1) {
+                                    partialResult += JSON.parse(matches[1]);
+                                }
+                                messages.value[messages.value.length - 1].text[0] = partialResult;
+
+                                // 繼續處理下一個部分
+                                reader.read().then(processChunk);
+                            }
+
+                            // 開始讀取部分結果
+                            reader.read().then(processChunk);
+                        })
+                        .catch(error => {
+                            messages.value[messages.value.length - 1].load = false;
+                            messages.value[messages.value.length - 1].text[0] = "伺服器過載請再試一次";
+                            console.error('Error:', error);
+                        });
+                };
+
+                const reflash = () => {
+                    messages.value = [{
+                        text: ['歡迎使用Google Gemini'],
+                        sent: false,
+                        load: false
+                    }];
+                }
+
+                const deleteComment = (position) => {
+                    messages.value.splice(position, messages.value.length - position);
+                }
+
+                return {
+                    messages,
+                    text,
+                    submit,
+                    reflash,
+                    deleteComment
+                }
+            }
+        });
+        app.use(Quasar)
+        Quasar.lang.set(Quasar.lang.zhTW)
+        Quasar.iconSet.set(Quasar.iconSet.svgFontawesomeV6)
+        Quasar.Dark.set(true)
+        app.mount('#q-app')
+    </script>
+</body>
+
+</html>
