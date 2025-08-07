@@ -52,7 +52,12 @@
                 <q-input outlined :dark="true" v-model="text" :dense="dense" placeholder="發送訊息"
                     @keyup.enter.exact="submit" autogrow>
                     <template v-slot:append>
-                        <q-btn icon="fa-solid fa-paper-plane" @click="submit" />
+                        <q-btn icon="fa-solid fa-paper-plane" @click="submit"></q-btn>
+                        <q-btn icon="fa-solid fa-face-smile">
+                            <q-popup-proxy @show="showEmoji">
+                                <emoji-picker></emoji-picker>
+                            </q-popup-proxy>
+                        </q-btn>
                     </template>
                 </q-input>
             </q-footer>
@@ -67,6 +72,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked-highlight/lib/index.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <script>
         let key;
         const { reactive, ref, watch, onMounted } = Vue;
@@ -85,11 +91,11 @@
                 key = json.key;
             })
             .catch(error => console.error('讀取檔案時發生錯誤：', error));
-
         /*
           Example kicking off the UI. Obviously, adapt this to your specific needs.
           Assumes you have a <div id="q-app"></div> in your <body> above
          */
+
         const app = Vue.createApp({
             setup() {
                 const messages = ref([{
@@ -252,6 +258,14 @@
                     messages.value.splice(position, messages.value.length - position);
                 }
 
+                const showEmoji = () => {
+                    document.querySelector('emoji-picker')
+                        .addEventListener('emoji-click', event => {
+                            console.log(event.detail);
+                            text.value += event.detail.unicode;
+                        });
+                };
+
                 onMounted(() => {
                     connectWebSocket();
                 });
@@ -263,6 +277,7 @@
                     submit,
                     reflash,
                     deleteComment,
+                    showEmoji,
                     requestNotificationPermission
                 }
             }
