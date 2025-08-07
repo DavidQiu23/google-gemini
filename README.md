@@ -4,4 +4,4 @@
   "key":{google gemini key}
 }
 ```
-![image](./image.png)
+![image](./GeminiAPI/wwwroot/image.png)
